@@ -1,0 +1,65 @@
+<div id = "form" style="  width: 80%;border: 1px solid rgb(221, 209, 209);height: 150px;padding: 20px 25px;background-color: rgb(226, 213, 213);">    
+    <h1><?php echo $this->__('CONVERT MODULE FROM MAGENTO 1.X TO MAGENTO 2.X') ?></h1>
+
+    <form action="<?php echo $this->getUrl('magento2challengeadmin/adminhtml_magento2challenge/convert'); ?>" id="convertForm" method="post" enctype="multipart/form-data">
+        <div class="input-box" style="height: 50px">
+            <div class="input-field" style="float:left; margin-right:10px;">
+                <input name="form_key" type="hidden" value="<?php echo Mage::getSingleton('core/session')->getFormKey() ?>" />
+                <input accept=".zip" name="zip_1x" id="zip_1x" class="input-file required-entry" type="file" />
+                <p><i><?php echo $this->__('Please upload your Magento 1.x module. Only zip file supported. Example link :'); ?>
+                <?php if ($zipfile = $this->createExampleModuleZip()): ?>
+                <a href="<?php echo $this->getUrl('magento2challengeadmin/adminhtml_magento2challenge/downloadExample', array('file' => $zipfile)); ?>" target="blank" ><?php echo $zipfile; ?></a>        
+                <?php endif; ?>
+                    </i></p>
+            </div>
+            <button type="submit" value="Submit" class="scalable" name="submit"><?php echo $this->__('Convert') ?></button>
+            <!--button type="submit" value="Submit" class="scalable" name="submitdownload"><?php //echo $this->__('Convert And Download') ?></button-->
+        </div>
+    </form>
+    <script type="text/javascript">
+        //< ![CDATA[
+        var convertForm = new varienForm('convertForm', true);
+        //]]>
+    </script>
+
+    <?php if ($zipfile = Mage::getSingleton('admin/session')->getData('magento2convert_zipfile')): ?>
+      <b><?php echo $this->__('Click on the file to download : ') ?></b>&nbsp;<a href="<?php echo $this->getUrl('magento2challengeadmin/adminhtml_magento2challenge/download', array('file' => $zipfile)); ?>" target="blank" ><?php echo $zipfile; ?></a>        
+    <?php endif; ?>
+</div>
+
+<?php if ($classError = $this->getClassError()): ?>
+    <div style="  width: 80%;border: 1px solid rgb(221, 209, 209);padding: 20px 25px;background-color: rgb(226, 213, 213);">
+        <h4>Please enter real class for this path :</h4>
+        <form action="<?php echo $this->getUrl('magento2challengeadmin/adminhtml_magento2challenge/savedata'); ?>" id="errorForm" method="post">
+            <input name="form_key" type="hidden" value="<?php echo Mage::getSingleton('core/session')->getFormKey() ?>" />
+            <table cellspacing="0" class="form-list" style="width: 830px;">
+                <tbody>
+                    <?php foreach($classError as $path => $type): ?>
+                    <tr>
+                        <td class="label" style="width: 350px;"><label for="<?php echo $path.$type; ?>"><?php echo $path; ?></label></td>
+                        <td class="value" style="width: 400px">
+                            <input id="<?php echo $path.$type; ?>" name="data[<?php echo $path.$type; ?>][target]" value="" class="input-text required-entry" type="text">
+                            <input id="<?php echo $path.$type; ?>" name="data[<?php echo $path.$type; ?>][type]" value="<?php echo $type ?>" class="input-text" type="hidden">
+                            <input id="<?php echo $path.$type; ?>" name="data[<?php echo $path.$type; ?>][origin]" value="<?php echo $path ?>" class="input-text" type="hidden">                        
+                        </td>
+                        <td class="scope-label">[<?php echo $type ?>]</td>
+                    </tr>
+                    <?php endforeach; ?>
+                </tbody>
+                <tfoot>
+                    <tr>
+                        <td>
+                            <button type="submit" value = "Send" class="scalable" name = "submit"><?php echo $this->__('Send') ?></button>
+                        </td>
+                    </tr>
+                </tfoot>
+            </table>
+        </form>
+        <br/><i><b>NOTE : </b>For example, if there is an error of <b>adminhtml/system_config_source_customer_group  [model]</b> after you upload a file, <br/>fill the code <b>Magento\Customer\Model\Config\Source\Group</b> and submit. Then, the error will be automatically fixed. </i>
+        <script type="text/javascript">
+            //< ![CDATA[
+            var errorForm = new varienForm('errorForm', true);
+            //]]>
+        </script>
+    </div>
+<?php endif; ?>

@@ -1,0 +1,362 @@
+<?php
+/**
+ * Magestore
+ *
+ * NOTICE OF LICENSE
+ *
+ * This source file is subject to the Magestore.com license that is
+ * available through the world-wide-web at this URL:
+ * http://www.magestore.com/license-agreement.html
+ *
+ * DISCLAIMER
+ *
+ * Do not edit or add to this file if you wish to upgrade this extension to newer
+ * version in the future.
+ *
+ * @category    Magestore
+ * @package     Magestore_Magento2challenge
+ * @copyright   Copyright (c) 2012 Magestore (http://www.magestore.com/)
+ * @license     http://www.magestore.com/license-agreement.html
+ */
+
+/**
+ * Magento2challenge Model
+ *
+ * @category    Magestore
+ * @package     Magestore_Magento2challenge
+ * @author      Magestore Developer
+ */
+class Magestore_Magento2challenge_Model_ConvertModel extends Mage_Core_Model_Abstract
+{
+    const SOURCE_FOLDER = '/var';
+
+    protected $_helper;
+
+    //temp var
+    private $_oldClassName;
+    private $_oldExtendsClass;
+
+    public function _construct()
+    {
+        $this->_helper = Mage::helper('magento2challenge/convertModel');
+        parent::_construct();
+        $this->_init('magento2challenge/convertModel');
+    }
+
+    //use to convert model file magento 1 to model file magento 2
+    public function convertModel($file, $resourceClass = ''){
+        //check file exist
+        if(!file_exists($file)){
+            throw new Exception('file does not exist', E_WARNING);
+        }
+
+        //auto check file type
+        $isFile = 'model';
+        if($resourceClass){
+            $resClass2Arr = explode('_', $resourceClass);
+            if(!isset($resClass2Arr[3])){
+                throw new Exception('Error resource class name, can\'t detect resource folder', E_WARNING);
+            }else{
+                $resourceFolder = $resClass2Arr[3];
+                $fileMatch = str_replace('\\', '/', $file);
+                if(preg_match('#app/code/.*?/.*?/.*?/Model/.*?('.$resourceFolder.').*\.php$#', $fileMatch, $matched)
+                    && !preg_match('#app/code/.*?/.*?/.*?/Model/.*?('.$resourceFolder.').*(Collection)\.php$#', $fileMatch, $matched))
+                {
+                    $isFile = 'resource';
+                }elseif(preg_match('#app/code/.*?/.*?/.*?/Model/.*?('.$resourceFolder.').*(Collection)\.php$#', $fileMatch, $matched)){
+                    $isFile = 'collection';
+                }else{
+                    $isFile = 'model';
+                }
+            }
+        }
+        //switch convert file type
+        if($isFile == 'model'){
+            $this->convertModelFile($file);
+        }elseif($isFile == 'resource'){
+            //starting convert resource
+            $contentResource = Mage::getModel('magento2challenge/convertResource')->convert($file, $resourceFolder, 'maintable');
+        }elseif($isFile == 'collection'){
+            //starting convert resource collection
+            $contentCollection = Mage::getModel('magento2challenge/convertCollection')->convert($file, $resourceFolder);
+        }else{
+            //starting convert other file
+        }
+
+
+    }
+
+    protected function convertModelFile($file){
+        //read file as string
+        $content = file_get_contents($file);
+
+        //convert include code to "use" code
+        $includes = $this->findCodeIncludedFiles($content);
+        foreach($includes as $incSyntaxStr){
+            $content = str_replace($incSyntaxStr, $this->convertIncludeFile($incSyntaxStr), $content);
+        }
+
+        //replace new class name
+        $content = str_replace($this->_getOldClassName($content), $this->_getNewClassName($content), $content);
+
+        //insert namespace
+        preg_match('/^<\?php/', $content, $matched, PREG_OFFSET_CAPTURE);
+        $headtext = substr($content, 0, $matched[0][1]+5);
+        $tailtext = str_replace($headtext, '', $content);
+        $content = $headtext . PHP_EOL . PHP_EOL .'namespace '.$this->_getMagento2Namespace($content) .';'. PHP_EOL . $tailtext;
+
+        //get old extends string code
+        if(preg_match('/(extends\s+([A-z0-9_]+?)\s*)\{/', $content, $matched)){
+            //replace extends class
+            if($this->_getNewExtends($content)){
+                $content = str_replace($matched[2], $this->_getNewExtends($content), $content);
+            }else{
+                $content = str_replace($matched[1], $this->_getNewExtends($content), $content);
+            }
+        }
+        /*code for replace implements*/
+
+        /*code for replace interface*/
+
+        $content = $this->_createConstruct($content);
+
+        //replace all create get model
+        $content = $this->_helper->replaceCreateModelMethod($content, $this->_getNewClassName($content));
+
+        //check if use $this->_objectManager
+        if(preg_match('/\$this\s*->\s*_objectManager/',$content)){
+            //insert objectManagerInterface to construct and declare it
+            if(preg_match('/public\s+function\s+__construct\s*(\()/', $content, $matched, PREG_OFFSET_CAPTURE)){
+                $pos = $matched[1][1];
+                $preCode = substr($content, 0, $pos + 1);
+                $tailCode = substr($content, $pos + 1);
+                preg_match('/^\s*/', $tailCode, $matched);
+                $tab = '';
+                if(isset($matched[0])){
+                    $tab = $matched[0];
+                }
+                $content = $preCode .' '.$tab.'\Magento\Framework\ObjectManagerInterface $objectManager, '. $tailCode;
+                $objectManagerAppend = '$this->_objectManager = $objectManager;';
+                $content = $this->_helper->appendContentToConstruct($content, $objectManagerAppend);
+                //append variable to class before public function construct
+                if(preg_match('/\s*public\s+function\s+__construct/', $content, $matched, PREG_OFFSET_CAPTURE)){
+                    $subCode = substr($content, 0, $matched[0][1]);
+                    $tailCode = substr($content, $matched[0][1]);
+                    $content = $subCode .PHP_EOL.'protected $_objectManager;'.PHP_EOL.$tailCode;
+                }
+            }
+        }
+        //replace registry
+        $content = $this->_helper->replaceRegistry($content);
+        //zend_debug::dump($this->_helper->getAllMethods($content,'Bannerslider'));die;
+        //replace event
+        $content = $this->_helper->replaceEvent($content);
+        //replace blockSingleton
+        $content = $this->_helper->replaceBlockSingleton($content);
+        //replace get helper
+        $content = $this->_helper->replaceHelper($content);
+        //repace getStoreConfig
+        $content = $this->_helper->replaceStoreConfig($content);
+        //repace getBaseUrl
+        $content = $this->_helper->replaceGetBaseUrl($content);
+        //replace Mage::app()->getStore[s]()
+        $content = $this->_helper->replaceAppGetStore($content);
+
+        //prepare path folder to save file from $newClassName
+        $fullClass = $this->_getMagento2Namespace($content) .'\\'. $this->_getNewClassName($content);
+        $pathFile = str_replace('\\', DS, $fullClass);
+        $pathFile = 'app'.DS.'code'.DS.$pathFile.'.php';
+
+        $this->writeModelFile($pathFile, $content);
+
+        return true;
+    }
+
+    //use to convert resource file magento 1 to resource file magento 2
+    protected function convertResourceFile($file, $className = ''){
+
+        return true;
+    }
+
+    ///use to convert collection file magento 1 to collection file magento 2
+    protected function convertCollectionFile($file, $className = ''){
+
+        return true;
+    }
+
+    //old class name is in correctly when it never translated ton new class name
+    private function _extractOldClassName($content){
+        if(preg_match('/class\s+([A-z0-9_]+?)\s/', $content, $matched)){
+            return $matched[1];
+        }else{
+            throw new Exception('Not found old class name from file', E_WARNING);
+        }
+    }
+
+    private function _extractExtendsClass($content){
+        $extendsClass = '';
+        if(preg_match('/(extends\s+([A-z0-9_]+?)\s*)\{/', $content, $matched)){
+            $extendsClass = $matched[2];
+        }
+        return $extendsClass;
+    }
+
+    private function _getOldClassName($content){
+        if(!$this->_oldClassName){
+            $this->_oldClassName = $this->_extractOldClassName($content);
+        }
+        return $this->_oldClassName;
+    }
+
+    private function _getNewClassName($content){
+        return $this->getMagento2ClassName($this->_getOldClassName($content)); //class name for to magento 2
+    }
+
+    private function _getOldExtensClass($content){
+        if(!$this->_oldExtendsClass){
+            $this->_oldExtendsClass = $this->_extractExtendsClass($content);
+        }
+        return $this->_oldExtendsClass;
+    }
+
+    private function _getNewExtends($content){
+        return Mage::getModel('magento2challenge/config_extends')->getModelExtends($this->_getOldExtensClass($content));
+    }
+
+    private function _getMagento2Namespace($content){
+        $namespace = $this->getMagento2Namespace($this->_getOldClassName($content));
+        if(!$namespace){
+            throw new Exception("No magento 2 namespace", E_WARNING);
+        }
+        return $namespace;
+    }
+
+    private function _createConstruct($content){
+        $newClassName = $this->_getNewClassName($content);
+        //zend_debug::dump($content);die;
+        //zend_debug::dump($this->_getNewExtends($content));die;
+        /*create construct function*/
+        $newConstruct = Mage::getModel('magento2challenge/config_construct')
+            ->getConstruct(
+                $this->_getNewExtends($content),
+                $this->_getMagento2Namespace($content),
+                $newClassName);
+        //zend_debug::dump($this->_getNewExtends($content));die;
+        //detect old construct function
+        $_old_construct = $this->_helper->getFunctionContentAll($content,'_construct');
+        $__old_construct = $this->_helper->getFunctionContentAll($content,'__construct');
+        //remove old __construct if exist
+        $content = str_replace($__old_construct, '', $content);
+
+        $_old_construct_content = $this->_helper->getFunctionContent($content,'_construct');
+        $__old_construct_content = $this->_helper->getFunctionContent($content,'__construct');
+        //remove unuse in content of _construct
+        $_old_construct_content = preg_replace('/parent\s*::\s*_construct\s*.*?\)\s*;/', '', $_old_construct_content); //remove old parent::_construct
+        $_old_construct_content = str_replace($this->_helper->searchLine('_init', '<?php '.$_old_construct_content), '', $_old_construct_content);//remove old _init
+        //remove unuse in content of __construct
+        $__old_construct_content = preg_replace('/parent\s*::\s*__construct\s*.*?\)\s*;/', '', $__old_construct_content); //remove old parent::__construct
+        $__old_construct_content = str_replace($this->_helper->searchLine('_init', '<?php '.$__old_construct_content), '', $__old_construct_content);//remove old _init
+        //add content to new construct
+        $allOldConstructContent = $_old_construct_content.PHP_EOL.$__old_construct_content;
+        $newConstruct = $this->_helper->appendContentFunction($newConstruct, $allOldConstructContent);
+
+        //replace old _construct it exist by default in model
+        if($_old_construct){
+            $content = str_replace($_old_construct, $newConstruct, $content);
+        }else{
+            $content = $newConstruct;
+        }
+
+        return $content;
+    }
+
+    //detect model file infomations from $path
+    //return array('namespace','modulename','modelpath')
+    public function detectModelFile($path){
+        $path = str_replace('\\','/',$path);
+        if(preg_match('/.+\/app\/code\/(.+)\/(.+)\/(.+)/',$path, $matcheds)){
+            return array($matcheds[1], $matcheds[2], $matcheds[3]);
+        }
+        return array();
+    }
+
+    //detect and return namespace or extension converting
+    public function detectNamespace($path){
+        $path = str_replace('\\','/',$path);
+        preg_match('/.+\/app\/code\/.+\/(.+)\/.+/',$path, $matcheds);
+        if($matcheds[1]){
+            return $matcheds[1];
+        }
+        return '';
+    }
+
+    //input may be have .php ext
+    //convert from path file to class path for magento 2
+    //ex: */app/code/*/Namespace/ExtensionName/Model/fileName.php to Namespace\ExtensionName\Model\FileName
+    public function convertPathToClassSpace($path){
+        $path = str_replace('\\','/',$path);
+        $path = trim($path,'/');
+        $path = substr($path,0,-4);
+
+        //remove real path
+        $path = preg_replace('/^.*\/app\/code\/.+?\//','',$path);
+
+        $pArray = explode('/',$path);
+        foreach($pArray as $key => $p){
+            $pArray[$key] = ucfirst($p);
+        }
+        return implode('\\',$pArray);
+    }
+
+    //convert include, require, include_one, require_one syntax to php5 syntax
+    //ex: include ("magento1.9/app/code/local/Magestore/Convertext/Model/Convertext.php" to use Magestore\Convertext\Model\Convertext;
+    public function convertIncludeFile($syntaxString){
+        preg_match('/^\s*(inc.*?|req.*?)\s*\(?\s*["\'](.*?)["\']\s*\)?.*?$/', $syntaxString, $matcheds);
+        $func_name = trim($matcheds[1]);
+        $include_file = trim($matcheds[2]);
+
+        switch($func_name){
+            case 'include':
+            case 'include_once':
+            case 'require':
+            case 'require_once':
+                $class = $this->convertPathToClassSpace($include_file);
+                if($class != ''){
+                    return 'use ' . $class . ';';
+                }
+                return '';
+        }
+    }
+
+    //find includes in all code
+    //return array includeds
+    public function findCodeIncludedFiles($codeText){
+        preg_match_all('/(inc.*?|req.*?)\s*\(?\s*["\'].*?["\']\s*\)?\s*?;/', $codeText, $matcheds);
+        return $matcheds[0];
+    }
+
+    //get namespace of file
+    public function getMagento2Namespace($className){
+        $path = str_replace('_','/',$className);
+        $fullNspace = $this->convertPathToClassSpace($path.'.php');
+        preg_match('/^(.*?)\\\\'.$this->getMagento2ClassName($className).'$/', $fullNspace, $matched);
+        return $matched[1];
+    }
+
+    //get last word of string old class name
+    public function getMagento2ClassName($className){
+        preg_match('/[^_]*$/',$className,$matched);
+        return $matched[0];
+    }
+
+
+    private function writeModelFile($file, $content){
+        try{
+            Mage::helper('magento2challenge')->writeContentToFile($file, $content);
+        }catch (Exception $e){
+            return false;
+        }
+        return true;
+    }
+
+}

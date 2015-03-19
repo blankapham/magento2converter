@@ -1,0 +1,145 @@
+<?xml version="1.0"?>
+<!--
+/**
+ * Magestore
+ * 
+ * NOTICE OF LICENSE
+ * 
+ * This source file is subject to the Magestore.com license that is
+ * available through the world-wide-web at this URL:
+ * http://www.magestore.com/license-agreement.html
+ * 
+ * DISCLAIMER
+ * 
+ * Do not edit or add to this file if you wish to upgrade this extension to newer
+ * version in the future.
+ * 
+ * @category    Magestore
+ * @package     Magestore_Magento2challenge
+ * @copyright   Copyright (c) 2012 Magestore (http://www.magestore.com/)
+ * @license     http://www.magestore.com/license-agreement.html
+ */
+-->
+<config>
+    <modules>
+        <Magestore_Magento2challenge>
+            <version>0.1.0</version>
+        </Magestore_Magento2challenge>
+    </modules>
+    <frontend>
+        <routers>
+            <magento2challenge>
+                <use>standard</use>
+                <args>
+                    <module>Magestore_Magento2challenge</module>
+                    <frontName>magento2challenge</frontName>
+                </args>
+            </magento2challenge>
+        </routers>
+        <layout>
+            <updates>
+                <magento2challenge>
+                    <file>magento2challenge.xml</file>
+                </magento2challenge>
+            </updates>
+        </layout>
+        <translate>
+            <modules>
+                <Magestore_Magento2challenge>
+                    <files>
+                        <default>Magestore_Magento2challenge.csv</default>
+                    </files>
+                </Magestore_Magento2challenge>
+            </modules>
+        </translate>
+    </frontend>
+    <admin>
+        <routers>
+            <magento2challengeadmin>
+                <use>admin</use>
+                <args>
+                    <module>Magestore_Magento2challenge</module>
+                    <frontName>magento2challengeadmin</frontName>
+                </args>
+            </magento2challengeadmin>
+        </routers>
+    </admin>
+    <adminhtml>
+        <layout>
+            <updates>
+                <magento2challenge>
+                    <file>magento2challenge.xml</file>
+                </magento2challenge>
+            </updates>
+        </layout>
+        <translate>
+            <modules>
+                <Magestore_Magento2challenge>
+                    <files>
+                        <default>Magestore_Magento2challenge.csv</default>
+                    </files>
+                </Magestore_Magento2challenge>
+            </modules>
+        </translate>
+    </adminhtml>   
+    <global>
+        <models>
+            <magento2challenge>
+                <class>Magestore_Magento2challenge_Model</class>
+                <resourceModel>magento2challenge_mysql4</resourceModel>
+            </magento2challenge>
+            <magento2challenge_mysql4>
+                <class>Magestore_Magento2challenge_Model_Mysql4</class>
+                <entities>
+                    <magento2challenge>
+                        <table>magento2challenge</table>
+                    </magento2challenge>
+                    <class>
+                        <table>magento2challenge_class</table>
+                    </class>
+                </entities>
+            </magento2challenge_mysql4>
+        </models>
+        <resources>
+            <magento2challenge_setup>
+                <setup>
+                    <module>Magestore_Magento2challenge</module>
+                    <class>Magestore_Magento2challenge_Model_Mysql4_Setup</class>
+                </setup>
+                <connection>
+                    <use>core_setup</use>
+                </connection>
+            </magento2challenge_setup>
+            <magento2challenge_write>
+                <connection>
+                    <use>core_write</use>
+                </connection>
+            </magento2challenge_write>
+            <magento2challenge_read>
+                <connection>
+                    <use>core_read</use>
+                </connection>
+            </magento2challenge_read>
+        </resources>
+        <blocks>
+            <magento2challenge>
+                <class>Magestore_Magento2challenge_Block</class>
+            </magento2challenge>
+        </blocks>
+        <helpers>
+            <magento2challenge>
+                <class>Magestore_Magento2challenge_Helper</class>
+            </magento2challenge>
+        </helpers>
+        <!-- <events>
+            <controller_action_predispatch>
+                <observers>
+                    <magento2challenge_observers>
+                        <class>magento2challenge/observer</class>
+                        <method>controllerActionPredispatch</method>
+                    </magento2challenge_observers>
+                </observers>
+            </controller_action_predispatch>
+        </events> -->
+    </global>
+</config>
